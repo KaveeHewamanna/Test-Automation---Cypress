@@ -1,0 +1,115 @@
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include <DHT.h>
+
+// ================= PIN DEFINITIONS =================
+#define DHT_PIN 4
+#define SOIL_SENSOR_PIN 34
+
+// ================= SENSOR CONFIG =================
+#define DHT_TYPE DHT11
+#define SOIL_SENSOR_DRY_VALUE 4095
+#define SOIL_SENSOR_WET_VALUE 0
+#define READING_DELAY_MS 2000
+#define SCREEN_DISPLAY_TIME_MS 2000
+
+// ================= OBJECTS =================
+DHT dht(DHT_PIN, DHT_TYPE);
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+// ================= VARIABLES =================
+float lastTemperature = 0;
+float lastHumidity = 0;
+int lastSoilMoisture = 0;
+
+unsigned long lastReadingTime = 0;
+unsigned long lastScreenTime = 0;
+int screenIndex = 0;
+
+// ================= SETUP =================
+void setup() {
+  Serial.begin(115200);
+  dht.begin();
+  pinMode(SOIL_SENSOR_PIN, INPUT);
+
+  lcd.init();
+  lcd.backlight();
+
+  lcd.setCursor(2, 0);
+  lcd.print("ESP32 Sensor");
+  lcd.setCursor(3, 1);
+  lcd.print("System");
+  delay(1500);
+  lcd.clear();
+}
+
+// ================= LOOP =================
+void loop() {
+
+  // -------- Read Sensors --------
+  if (millis() - lastReadingTime >= READING_DELAY_MS) {
+    lastReadingTime = millis();
+
+    float temp = dht.readTemperature();
+    float hum = dht.readHumidity();
+
+    if (!isnan(temp) && !isnan(hum)) {
+      lastTemperature = temp;
+      lastHumidity = hum;
+    } else {
+      Serial.println("DHT Read Error");
+    }
+
+    int raw = analogRead(SOIL_SENSOR_PIN);
+    int soilPercent = map(raw, SOIL_SENSOR_DRY_VALUE, SOIL_SENSOR_WET_VALUE, 0, 100);
+    soilPercent = constrain(soilPercent, 0, 100);
+    lastSoilMoisture = soilPercent;
+
+    Serial.println("------ SENSOR DATA ------");
+    Serial.print("Temperature: ");
+    Serial.print(lastTemperature);
+    Serial.println(" C");
+
+    Serial.print("Humidity: ");
+    Serial.print(lastHumidity);
+    Serial.println(" %");
+
+    Serial.print("Soil Moisture: ");
+    Serial.print(lastSoilMoisture);
+    Serial.println(" %");
+    Serial.println("-------------------------");
+  }
+
+  // -------- LCD Screen Rotation --------
+  if (millis() - lastScreenTime >= SCREEN_DISPLAY_TIME_MS) {
+    lastScreenTime = millis();
+    lcd.clear();
+
+    if (screenIndex == 0) {
+      lcd.setCursor(0, 0);
+      lcd.print("Temperature");
+      lcd.setCursor(0, 1);
+      lcd.print(lastTemperature, 1);
+      lcd.print(" C");
+    }
+
+    else if (screenIndex == 1) {
+      lcd.setCursor(0, 0);
+      lcd.print("Humidity");
+      lcd.setCursor(0, 1);
+      lcd.print(lastHumidity, 0);
+      lcd.print(" %");
+    }
+
+    else if (screenIndex == 2) {
+      lcd.setCursor(0, 0);
+      lcd.print("Soil Moisture");
+      lcd.setCursor(0, 1);
+      lcd.print(lastSoilMoisture);
+      lcd.print(" %");
+    }
+
+    screenIndex++;
+    if (screenIndex > 2) screenIndex = 0;
+  }
+}
